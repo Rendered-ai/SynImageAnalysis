@@ -1,7 +1,11 @@
 '''
-
+Visualize the reduced real and syn data.
+Input: df, a dataframe with latent dim1 and dim2.
+Ouput: visualization of real/syn data points in the latent space. 
 '''
 
+
+from feature_reduction import umap_embedding, pca_embedding, nmf_embedding
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -41,9 +45,6 @@ def scatterplot_2d(df2, real_index_lst=real_index_lst, syn_index_lst=syn_index_l
         plt.scatter(x[i], y[i], marker='x', color='black')
     # plt.show()
     plt.savefig("/content/sample_data/p"+str(LEVEL)+"_scatter2d.pdf", dpi=150)
-
-scatterplot_3d(df)
-scatterplot_2d(df2)
 
 
 def getCentroidsAndOutliers():
@@ -97,6 +98,3 @@ def display_images(images, titles=None, cols=4, cmap=None, norm=None,
         i += 1
     # plt.show()
     plt.savefig("/content/sample_data/p"+str(LEVEL)+"_imgs.pdf", dpi=150)
-
-
-display_images(images, real_index_lst+syn_index_lst, cols=4)

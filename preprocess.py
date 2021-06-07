@@ -1,57 +1,57 @@
-'''
-Preprocess
-Make tiles add input here
-Input:
-coco_json | geojson What are some other formats? Optional?
-Img_folder_dir
-Output_dir
-Tile_size
-Only select tiles with desired classes. Folder dir:
-- tiles
-<name of the tiles> match the syn data.
-Coco - format
-Output_img_name: 001-img_<tile_order>
-Make bbox add input here
-Input
-coco_json | geojson
-Img_folder_dir
-output_dir
-File dir
-			-bbox
-				-class1
-				-class2
-				-class3
-				…
-			<img_name> _<class_id >_<obj_id>
-'''
-
-
+import aug_util as aug
+import wv_util as wv
+import matplotlib.pyplot as plt
+import numpy as np
+import csv
+from tqdm import tqdm
 import numpy as np
 from PIL import Image
 import tensorflow as tf
 from PIL import Image, ImageDraw
 import skimage.filters as filters
-from tqdm import tqdm_notebook
 
 
-def findCranesImages(chips, classes):
-    '''
-    :param chips: a list of image filenames, whose size is (512, 512, 3)
-    :param classes: xview image names.
-    :return:
-    '''
+def findCranesImages(coords, chips, classes):
     desired_img_files = []
     # We only want to coordinates and classes that are within our chip
-    for chip_name in tqdm_notebook(list(np.unique(chips))):
-        _classes = classes[chips == chip_name].astype(np.int64)
+    for chip_name in tqdm(list(np.unique(chips))):
+        # _coords = coords[chips==chip_name]
+        _classes = classes[chips==chip_name].astype(np.int64)
         for c in [32, 54, 59]:
             if c in np.unique(_classes):
                 desired_img_files.append(chip_name)
                 print('keep image: {}'.format(chip_name))
     return desired_img_files
 
-coords, chips, classes = wv.get_labels(jeojson_f)
-desired_img_files=findCranesImages(coords, chips, classes)
+
+
+def load_img_tiles(chip_name, coords, classes, img_dir=''):
+    arr = wv.get_image(img_dir+chip_name)
+    # We only want to coordinates and classes that are within our chip
+    arr_coords = coords[chips==chip_name]
+    arr_classes = classes[chips==chip_name].astype(np.int64)
+
+    #We can chip the image into 512x512 chips
+    c_img, c_box, c_cls = wv.chip_image(img=arr, coords=arr_coords, classes=arr_classes, shape=tile_size)
+    # print("Num Chips: %d" % c_img.shape[0])
+    return c_img, c_box, c_cls
+
+
+def findCraneTiles(c_img, c_box, c_cls, desired_labels = (32, 54, 59)): 
+    idx_to_keep = []
+    for i in c_cls:
+        tmp = 0
+        for cls in desired_labels:
+            if cls in c_cls[i]:
+                tmp+=1
+        if tmp>0:
+            idx_to_keep.append(i)
+    c_imgs_to_keep = c_img[idx_to_keep]
+    c_box_to_keep = [c_box[i] for i in idx_to_keep]
+    c_cls_to_keep = [c_cls[i] for i in idx_to_keep]
+    return c_imgs_to_keep, c_box_to_keep, c_cls_to_keep
+
+
 
 def get_bboxes(img, boxes, classes, output_dir, desired_classes=(32,54,59)):
     """
@@ -67,61 +67,63 @@ def get_bboxes(img, boxes, classes, output_dir, desired_classes=(32,54,59)):
     """
     source = Image.fromarray(img)
     draw = ImageDraw.Draw(source)
+    w2,h2 = (img.shape[0],img.shape[1])
 
     classes = list(classes)
-    count = 0
-    cropped_imgs = []
 
+    count = 0
+    # cropped_imgs = []
     for i, b in enumerate(boxes):
-        xmin, ymin, xmax, ymax = [int(x) for x in b]
+        xmin,ymin,xmax,ymax = [int(x) for x in b]
         cropped_img = img[ymin:ymax, xmin:xmax, :]
-        print(cropped_img)
+        # print(cropped_img)
         cropped_source = Image.fromarray(cropped_img)
         label = classes[i]
         if label in desired_classes:
             count += 1
             cropped_source.save(output_dir+'img='+str(img_id)+'_label='+str(label)+'_count='+str((count))+".tif")
-
     print('Now saved {} bbox at: {}'.format(count, output_dir))
-
-    #     cropped_imgs.append(cropped_source)
-    #     for j in range(3):
-    #         draw.rectangle(((xmin+j, ymin+j), (xmax+j, ymax+j)), outline="red")
+        # cropped_imgs.append(cropped_source)
+        # for j in range(3):
+        #     draw.rectangle(((xmin+j, ymin+j), (xmax+j, ymax+j)), outline="red")
     # return cropped_imgs
 
 
-# register dataset
-coco_dir = 'satrgb-cyclegan-10000-8/coco.json'
-img_dir = 'satrgb-cyclegan-10000-8/images/'
-coco = load_ann(coco_dir)
 
-def crop_image(original_img_folder, file_name, bbox):
-    ori_img_dir = original_img_folder + file_name
-    my_image = cv2.imread(ori_img_dir)
-    buffer = 0
-    cropped_im = my_image[math.floor(bbox[1]) - buffer: math.floor(bbox[1]) + math.ceil(bbox[3]) + buffer,
-                 math.floor(bbox[0]) - buffer: math.floor(bbox[0]) + math.ceil(bbox[2]) + buffer, :]
-    return cropped_im
+real_train_images_dir = '/content/drive/MyDrive/111 Rendered.ai/xview/real_data/train_images/'
+jeojson_f = '/content/drive/MyDrive/111 Rendered.ai/xview/real_data/xView_train.geojson'
+chip_name = '104.tif'
+output_dir = '/content/drive/MyDrive/111 Rendered.ai/xview/real_data/real_data_chips/'
+tile_size = (512, 512)
 
 
-def get_bbox(image_dir, ann, n_instances=5000, save_bbox=False, output_dir=None):
-    crop_ims = []
-    for i in tqdm(range(n_instances)):
-        instance = ann.iloc[i]
-        file_name = instance['file_name']
-        bbox = instance['bbox']
-        category_id = instance['category_id']
-        if category_id == 99:
-            continue
-        cropped_im = crop_image(image_dir, file_name, bbox)
-        crop_ims.append(cropped_im)
-        # print(category_id)
-        # cv2_imshow(cropped_im)
-        # save cropped images
-        if save_bbox:
-            output_name = str(i)+'_'+file_name[:-4]+'_'+str(category_id)
-            # np.save(output_dir+output_name, cropped_im)
-            Image.fromarray(cropped_im).save(output_dir+output_name+".jpeg")
-    return crop_ims
+coords, chips, classes = wv.get_labels(jeojson_f)
+desired_img_files=findCranesImages(coords, chips, classes)
 
-bboxs = get_bbox(img_dir, coco, n_instances=5000, save_bbox=True, output_dir='clustering_sampled_data/bbox/syn/')
+c_imgs, c_boxes, c_clses = [], [], []
+tiles_count = 0
+for _, chip_name in tqdm(enumerate(desired_img_files)):
+    c_img, c_box, c_cls = load_img_tiles(chip_name, coords, classes, img_dir=real_train_images_dir)
+    c_imgs_to_keep, c_box_to_keep, c_cls_to_keep = findCraneTiles(c_img, c_box, c_cls)
+    if c_cls_to_keep:
+        tiles_count += len(c_cls_to_keep)
+        # print('tiles count now:', tiles_count)
+        c_imgs.append(c_imgs_to_keep)
+        c_boxes.append(c_box_to_keep)
+        c_clses.append(c_cls_to_keep)
+
+tile_images = np.vstack(c_imgs)
+tile_labels = np.asarray([list(l) for tile in c_clses for l in tile])
+tile_bboxes = np.array([bbox for tile in c_boxes for bbox in tile])
+
+# save images
+# for i, img in tqdm(enumerate(tile_images)):
+#     Image.fromarray(img).save(output_dir+str(i)+'.jpg')
+
+# save coco ann
+# ann = pd.concat([pd.DataFrame(tile_labels, columns=['labels']),pd.DataFrame(tile_bboxes, columns=['bbox'])], axis=1).reset_index().rename(columns={'index':'image_id'})
+# ann.to_csv(output_dir+'annotations.csv')
+
+# We can visualize the chips with their labels
+# for img_id in tqdm(range(tile_images.shape[0])):
+#     get_bboxes(tile_images[img_id], tile_bboxes[img_id], tile_labels[img_id], output_dir)

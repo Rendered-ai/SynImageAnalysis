@@ -5,6 +5,22 @@ from tqdm import tqdm
 import cv2
 
 
+def load_images(img_file_lst, img_dir):
+    """
+    Load a list of images from a directory.
+
+    :param img_file_lst:
+    :param img_dir:
+    :return:
+    """
+    lst = []
+    for f in tqdm(img_file_lst):
+        im = cv2.imread(img_dir+f)
+        lst.append(im)
+    arr = np.asarray(lst)
+    return arr
+
+
 def load_preds(coco_dir):
     """
     Load predictions of fasterRCNN

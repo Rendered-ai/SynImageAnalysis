@@ -31,7 +31,7 @@ def scatterplot_3d(df, level=None, isReal2Syn=True):
     plt.show()
 
 
-def scatterplot_2d(df, real_index_lst, syn_index_lst, output_dir):
+def scatterplot_2d(df, real_index_lst, syn_index_lst, output_dir, level, isReal2Syn):
     """
     2d scatter plot
 
@@ -39,7 +39,9 @@ def scatterplot_2d(df, real_index_lst, syn_index_lst, output_dir):
     :param real_index_lst: The outlier and centroid index of the image list.
     :param syn_index_lst: The outlier and centroid index of the image list.
     :param output_dir: The output directory for the 2d scatter plot.
-    :return:
+    :param level: feature pyramid level
+    :param isReal2Syn: mapping from syn to real or other way around.
+    :return: A 2d scatter plot.
     """
     fig = plt.figure(figsize=(8,8))
     ax = plt.axes()
@@ -50,12 +52,12 @@ def scatterplot_2d(df, real_index_lst, syn_index_lst, output_dir):
     ax.scatter(x[:n], y[:n], color='yellow', linewidth=0.1, alpha=0.5, label='real data');
     ax.scatter(x[n:], y[n:], color='purple', linewidth=0.1, alpha=0.5, label='syn data');
     ax.legend(); ax.set_xlabel('Latent Dim 1');ax.set_ylabel('Latent Dim 2');
-    ax.set_title('{1} UMAP 2d clustering visualization 2d, p{0}, isReal2Syn={2}'.format(LEVEL, 'CycleGAN', isReal2Syn))
-    for k, i in enumerate(real_index_lst+syn_index_lst):
+    ax.set_title('{1} UMAP 2d clustering visualization 2d, p{0}, isReal2Syn={2}'.format(level, 'CycleGAN', isReal2Syn))
+    for k, i in enumerate(real_index_lst + syn_index_lst):
         plt.text(x[i], y[i], i)
         plt.scatter(x[i], y[i], marker='x', color='black')
     plt.show()
-    plt.savefig(output_dir + "/p"+str(LEVEL)+"_scatter2d.pdf", dpi=150)
+    plt.savefig(output_dir + "/p"+str(level)+"_scatter2d.pdf", dpi=150)
 
 
 def getCentroidsAndOutliers(data):

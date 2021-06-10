@@ -34,7 +34,7 @@ def umap_embedding(real_data, syn_data, num_components=3, isReal2Syn=True, randn
 
 def getDF(real_emb, syn_emb, r_lst, s_lst):
     """
-    Create a df for reduced-shape synthetic and real data.
+    Create a df for reduced-shape synthetic and real data for visualization.
 
     :param real_emb: An array of shape (n_images, latent_dim)
     :param syn_emb: An array of shape (n_images, latent_dim)

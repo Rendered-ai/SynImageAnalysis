@@ -10,8 +10,6 @@ real_emb, syn_emb, df
 import numpy as np 
 import pandas as pd
 import umap
-import plotly.express as px
-import os
 
 def umap_embedding(real_data, syn_data, num_components=3, isReal2Syn=True, randn_state=42):
     '''

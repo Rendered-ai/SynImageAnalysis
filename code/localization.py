@@ -1,56 +1,28 @@
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
-import os, json, cv2, random, math
-from google.colab.patches import cv2_imshow
-import torch 
-import torchvision
-import torch.nn as nn 
-from torchvision import transforms
-from torchvision.models._utils import IntermediateLayerGetter
-from torch.utils.data import DataLoader
-import PIL
-from IPython.display import Image 
-# from PIL import Image
-import requests
-from tqdm import tqdm 
-from sklearn import decomposition    
-from sklearn.preprocessing import MinMaxScaler
-from detectron2 import model_zoo
-from detectron2.engine import DefaultPredictor
-from detectron2.config import get_cfg
-from detectron2.utils.visualizer import Visualizer
-from detectron2.data import MetadataCatalog, DatasetCatalog
-from detectron2.modeling import build_model
-import detectron2
+import cv2
+import torch.nn as nn
 from detectron2.utils.logger import setup_logger
 setup_logger()
-import load_data  
-
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-seed = 12345
-random.seed(seed)
-torch.manual_seed(seed)
 
 
 def attention_map(X, fast_rcnn, power=2):
     """
-    Generate a localisation map for the predicted class given an input 
+    Generate a localisation map for the predicted class given an input
     image and a pretrained CNN
-    
-    Inputs:
+
+    Input:
     - X: Input image: synthetic data, Size of input torch.Size([1, 3, 512, 512])
     - fast_rcnn: Pretrained Fast RCNN on real data
-    
-    Returns:
+
+    Return:
     - localisation_maps : spatial attention map from FPN(feature pyramid network), p2-p6
     """
     fast_rcnn.eval()
     feature_map = fast_rcnn.backbone(X)
     localisation_maps = []
-    for i in range(2,7):
-        pi = feature_map["p"+str(i)]
+    for i in range(2, 7):
+        pi = feature_map["p" + str(i)]
         att_pi = pi.pow(power).mean(1)
         localisation_maps.append(att_pi)
     return np.asarray(localisation_maps)
@@ -58,32 +30,43 @@ def attention_map(X, fast_rcnn, power=2):
 
 def localisation(X, fast_rcnn):
     """
-    Generate a localisation map for the predicted class given an input 
+    Generate a localisation map for the predicted class given an input
     image and a pretrained CNN
-    
-    Inputs:
+
+    Input:
     - X: Input image: synthetic data, Size of input torch.Size([1, 3, 512, 512])
     - fast_rcnn: Pretrained Fast RCNN on real data
-    
-    Returns:
+
+    Return:
     - localisation_map : feature map from FPN(feature pyramid network), p2-p6
     """
     fast_rcnn.eval()
     feature_map = fast_rcnn.backbone(X)
     localisation_maps = []
-    for i in range(2,7):
-        feature_map_pi = feature_map["p"+str(i)]
+    for i in range(2, 7):
+        feature_map_pi = feature_map["p" + str(i)]
         map = feature_map_pi.mean(1)
         localisation_maps.append(map)
     return np.asarray(localisation_maps)
 
 
 def objectness_logit_map(X, fast_rcnn):
+    """
+    Generate a objectness_logit_map for the predicted class given an input
+    image and a pretrained detectron2 model.
+
+    Input:
+    - X: Input image: synthetic data, Size of input torch.Size([1, 3, 512, 512])
+    - fast_rcnn: Pretrained Fast RCNN on real data
+
+    Return:
+    - objectness_logit_map : objectness_logit_map from FPN(feature pyramid network), p2-p6
+    """
     fast_rcnn.eval()
     feature_map = fast_rcnn.backbone(X)
     objectness_logit_maps = []
-    for i in range(2,7):
-        feature_map_pi = feature_map["p"+str(i)]
+    for i in range(2, 7):
+        feature_map_pi = feature_map["p" + str(i)]
         out = fast_rcnn.proposal_generator.rpn_head.conv(feature_map_pi)
         # print(out.shape)
         out = fast_rcnn.proposal_generator.rpn_head.objectness_logits(out)
@@ -96,21 +79,36 @@ def objectness_logit_map(X, fast_rcnn):
 
 
 def plotting(localization_maps, map_name):
-    f, axarr = plt.subplots(1,5,figsize=(17,17))
+    """
+    Plot out the localization map of level 2 to 6 of FasterRCNN.
+
+    Input:
+    - X: Input image: synthetic data, Size of input torch.Size([1, 3, 512, 512])
+    - fast_rcnn: Pretrained Fast RCNN on real data
+
+    Return:
+    - A localization map from p2 - p6.
+    """
+    f, axarr = plt.subplots(1, 5, figsize=(17, 17))
     for i, map in enumerate(localization_maps):
         axarr[i].imshow(map[0].cpu().detach().numpy())
-        axarr[i].set_title(str(map_name)+ " map of p"+str(i+2))
+        axarr[i].set_title(str(map_name) + " map of p" + str(i + 2))
 
 
 def upsampling(p_i, local_maps, upsampling_mode='nearest'):
     """
+    Upsample the localization maps to make them into the same size of the original image.
+
     Input:
-    p_i: which pyramid in the FPN
-    local_maps: a list of local_maps, which contains feature maps from p2 to p6.
-    upsampling_mode: which upsampling method you choose from nn.upsample. default is 'nearest'.
+    - p_i: which pyramid in the FPN
+    - local_maps: a list of local_maps, which contains feature maps from p2 to p6.
+    - upsampling_mode: which upsampling method you choose from nn.upsample. default is 'nearest'.
+
+    Return:
+    - An upsampled localization maps of a particular level.
     """
-    p_i_to_scale_factor = {0:4, 1:8, 2:16, 3:32, 4:64}
-    input = local_maps[p_i].view(1,local_maps[p_i].shape[0],local_maps[p_i].shape[1],-1)
+    p_i_to_scale_factor = {0: 4, 1: 8, 2: 16, 3: 32, 4: 64}
+    input = local_maps[p_i].view(1, local_maps[p_i].shape[0], local_maps[p_i].shape[1], -1)
     upsampler = nn.Upsample(scale_factor=p_i_to_scale_factor[p_i], mode='nearest')
     out = upsampler(input)
     return out
@@ -118,15 +116,22 @@ def upsampling(p_i, local_maps, upsampling_mode='nearest'):
 
 def overlay_heatmap(local_map, image, alpha=0.7, colormap=cv2.COLORMAP_JET):
     """
+    Overlay the localisation map onto the original image.
+    You could either plot out the maps or just return without visualization.
+
     Input:
-    local_map: upsampled localization map size (512,512)
-    image: orginial image (512, 512, 3) from cv2.imread()
-    alpha: weights of activation map vs orginal image
-    colormap: you choose whatever you like
+    - local_map: upsampled localization map size (512,512)
+    - image: orginial image (512, 512, 3) from cv2.imread()
+    - alpha: weights of activation map vs orginal image
+    - colormap: you choose whatever you like
+
+    Return:
+    - heatmap: the normalized localization map
+    - output: the localization map overlaid on the original image.
     """
     # normalization
-    heatmap = (local_map -local_map.min()) / (local_map.max()-local_map.min())
-    # apply the supplied color map to the heatmap 
+    heatmap = (local_map - local_map.min()) / (local_map.max() - local_map.min())
+    # apply the supplied color map to the heatmap
     CAM = cv2.applyColorMap(np.uint8(255 * heatmap), colormap)
     # overlay the heatmap on the input image
     output = cv2.addWeighted(image, alpha, CAM, 1 - alpha, 0)
@@ -139,57 +144,3 @@ def overlay_heatmap(local_map, image, alpha=0.7, colormap=cv2.COLORMAP_JET):
     # axarr[2].imshow(output)
     # plt.title('Activation Map')
     return (heatmap, output)
-
-
-real_coco_dir = "/content/drive/MyDrive/111 Rendered.ai/RarePlanes/datasets/coco_data/aircraft_real_test_coco.json"
-real_images_dir = "/content/drive/MyDrive/111 Rendered.ai/RarePlanes/datasets/real/test/RarePlanes_test_PS-RGB_tiled.tar.gz (Unzipped Files)/PS-RGB_tiled"
-pred_coco_dir = "/content/drive/MyDrive/111 Rendered.ai/RarePlanes/output/coco_instances_results.json"
-pred_images_dir = "/content/drive/MyDrive/111 Rendered.ai/RarePlanes/datasets/synthetic/test/images/"
-
-model_config_file = "COCO-Detection/faster_rcnn_R_50_FPN_1x.yaml"
-model_weight_file = "/content/drive/My Drive/111 Rendered.ai/rareplane_models/model_0043999.pth"
-
-# set output dir 
-npy_dir = "/content/sample_data/"
-jpg_dir = "/content/sample_data/"
-
-
-# load model
-cfg = get_cfg()
-# add project-specific config (e.g., TensorMask) here if you're not running a model in detectron2's core library
-cfg.merge_from_file(model_zoo.get_config_file(model_config_file))
-cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.5  # set threshold for this model
-# Find a model from detectron2's model zoo. You can use the https://dl.fbaipublicfiles... url as well
-cfg.MODEL.WEIGHTS = model_weight_file
-model = build_model(cfg)
-
-# load data
-ann = load_data.get_image_ann(real_coco_dir, real_images_dir)
-preds_coco = load_data.load_preds(pred_coco_dir, pred_images_dir)
-img_ids = load_data.get_wrong_pred_img_id(preds_coco)
-img_dirs = load_data.id2filename(img_ids, ann)
-img_collections = load_data.load_wrong_images(img_dirs)
-
-# send both the model to gpu
-fast_rcnn = model.to(device)
-
-imagenet_transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                     std=[0.229, 0.224, 0.225]),])
-
-n_imgs = img_collections.shape[0]
-for i in tqdm(range(n_imgs)):
-    im = img_collections[i]
-    # send data to gpu
-    X = imagenet_transform(im).unsqueeze(0).to(device)
-    attention_maps = attention_map(X, fast_rcnn)
-    for fpn_layer in range(5):
-        att = upsampling(fpn_layer, attention_maps, upsampling_mode='nearest')
-        att = att.cpu().detach().numpy()[0][0]
-        (heatmap, output) = overlay_heatmap(att, im, alpha=0.75)
-        # save as numpy arr
-        output_name = "att_map_"+str(i)+"_fpn_layer="+str(fpn_layer+2)
-        np.save(npy_dir+output_name, output)
-        # save a jpg
-        PIL.Image.fromarray(output).save(jpg_dir+output_name+".jpeg")

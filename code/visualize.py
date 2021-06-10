@@ -127,5 +127,5 @@ def display_images(images, titles=None, cols=4, cmap=None, norm=None,
                    norm=norm, interpolation=interpolation)
         i += 1
     plt.show()
-    plt.savefig(output_dir+"/p"+str(LEVEL)+"_imgs.pdf", dpi=150)
+    plt.savefig(output_dir+"/display_imgs.pdf", dpi=150)
 

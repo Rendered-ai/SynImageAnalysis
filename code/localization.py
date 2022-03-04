@@ -24,7 +24,7 @@ def attention_map(X, fast_rcnn, power=2):
     for i in range(2, 7):
         pi = feature_map["p" + str(i)]
         att_pi = pi.pow(power).mean(1)
-        localisation_maps.append(att_pi)
+        localisation_maps.append(att_pi.cpu().detach())
     return np.asarray(localisation_maps)
 
 
@@ -46,7 +46,7 @@ def localisation(X, fast_rcnn):
     for i in range(2, 7):
         feature_map_pi = feature_map["p" + str(i)]
         map = feature_map_pi.mean(1)
-        localisation_maps.append(map)
+        localisation_maps.append(map.cpu().detach())
     return np.asarray(localisation_maps)
 
 
